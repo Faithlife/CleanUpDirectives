@@ -1,11 +1,17 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>netstandard2.0</TargetFramework>
-    <Description>CleanUpDirectives class library.</Description>
-    <PackageTags></PackageTags>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>netcoreapp3.1</TargetFramework>
+    <Description>A .NET Core Tool to clean up C# preprocessor directives.</Description>
+    <PackageTags>preprocessor directive</PackageTags>
     <IsPackable>true</IsPackable>
-    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <PackAsTool>True</PackAsTool>
   </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="ArgsReading" Version="2.3.0" />
+    <PackageReference Include="Glob" Version="1.1.7" />
+  </ItemGroup>
 
 </Project>
