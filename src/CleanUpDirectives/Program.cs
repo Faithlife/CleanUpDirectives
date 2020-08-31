@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net.Sockets;
+using System.Text.RegularExpressions;
 using System.Threading;
 using ArgsReading;
 using GlobExpressions;
@@ -58,10 +59,41 @@ namespace CleanUpDirectives
 			if (invalidPath != null)
 				throw new ApplicationException($"Directories not supported; use glob to select files, e.g. **/*.cs{Environment.NewLine}Directory matched: {invalidPath}");
 
+			var symbols = new HashSet<string>();
+
+			Console.WriteLine("Files:");
 			foreach (var path in paths)
+			{
 				Console.WriteLine(path);
 
+				string?[] lines = Regex.Split(File.ReadAllText(path), @"(?<=\n)");
+				foreach (var line in lines)
+				{
+					var match = Regex.Match(line!, @"^\s*#(if|elif)(?=\W)\s*([^\r\n/]+?)\s*$");
+					if (match.Success)
+					{
+						var node = ExpressionParser.Parse(match.Groups[2].Value);
+						foreach (var symbol in GetSymbols(node))
+							symbols.Add(symbol);
+					}
+				}
+			}
+			Console.WriteLine();
+
+			Console.WriteLine("Symbols:");
+			foreach (var expression in symbols.OrderBy(x => x, StringComparer.Ordinal))
+				Console.WriteLine(expression);
+			Console.WriteLine();
+
 			return 0;
+
+			IEnumerable<string> GetSymbols(ExpressionNode node)
+			{
+				if (node.Children.Count == 0)
+					yield return node.Value;
+				foreach (var symbol in node.Children.SelectMany(GetSymbols))
+					yield return symbol;
+			}
 		}
 
 		private static IReadOnlyList<string> GetFullPathsFromGlobs(IEnumerable<string> globs) =>
