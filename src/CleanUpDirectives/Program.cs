@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net.Sockets;
+using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using ArgsReading;
@@ -38,6 +39,7 @@ namespace CleanUpDirectives
 
 			var shouldListExpressions = args.ReadFlag("list-expr");
 			var shouldListSymbols = args.ReadFlag("list-symbols");
+			var shouldFormat = args.ReadFlag("format");
 
 			var globs = args.ReadArguments();
 			if (globs.Count == 0)
@@ -68,21 +70,52 @@ namespace CleanUpDirectives
 			Console.WriteLine("Files:");
 			foreach (var path in paths)
 			{
-				Console.WriteLine(path);
+				Console.Write(path);
 
 				string?[] lines = Regex.Split(File.ReadAllText(path), @"(?<=\n)");
-				foreach (var line in lines)
+				var needsSave = false;
+
+				for (int index = 0; index < lines.Length; index++)
 				{
-					var match = Regex.Match(line!, @"^\s*#(if|elif)(?=\W)\s*([^\r\n/]+?)\s*$");
+					var line = lines[index]!;
+					var match = Regex.Match(line, @"^\s*#(if|elif)(?=\W)\s*([^\r\n/]+?)\s*$");
 					if (match.Success)
 					{
-						var expression = match.Groups[2].Value;
+						var expressionCapture = match.Groups[2];
+						var expression = expressionCapture.Value;
 						expressions.Add(expression);
 
 						var node = ExpressionParser.Parse(expression);
 						foreach (var symbol in GetSymbols(node))
 							symbols.Add(symbol);
+
+						if (shouldFormat)
+						{
+							var formatted = node.ToString();
+							if (expression != formatted)
+							{
+								lines[index] = line.Substring(0, expressionCapture.Index) + formatted +
+									line.Substring(expressionCapture.Index + expressionCapture.Length);
+								needsSave = true;
+							}
+						}
 					}
+				}
+
+				if (needsSave)
+				{
+					var newText = new StringBuilder();
+					foreach (var line in lines)
+					{
+						if (line != null)
+							newText.Append(line);
+					}
+					File.WriteAllText(path, newText.ToString(), s_utf8);
+					Console.WriteLine(" [edited]");
+				}
+				else
+				{
+					Console.WriteLine(" [viewed]");
 				}
 			}
 			Console.WriteLine();
@@ -130,8 +163,11 @@ namespace CleanUpDirectives
 				"",
 				"Options:",
 				"  -x|--exclude <glob> : Exclude matching files and directories",
+				"  --format : Reformat #if and #elif expressions",
 				"  --list-expr : Lists all unique #if and #elif expressions",
 				"  --list-sym : Lists all symbols found in #if and #elif expressions",
 				""));
+
+		private static readonly UTF8Encoding s_utf8 = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
 	}
 }
