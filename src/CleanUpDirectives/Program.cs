@@ -36,6 +36,9 @@ namespace CleanUpDirectives
 			while (args.ReadOption("x|exclude") is string exclude)
 				excludes.Add(exclude);
 
+			var shouldListExpressions = args.ReadFlag("list-expr");
+			var shouldListSymbols = args.ReadFlag("list-symbols");
+
 			var globs = args.ReadArguments();
 			if (globs.Count == 0)
 				throw CreateUsageException();
@@ -59,6 +62,7 @@ namespace CleanUpDirectives
 			if (invalidPath != null)
 				throw new ApplicationException($"Directories not supported; use glob to select files, e.g. **/*.cs{Environment.NewLine}Directory matched: {invalidPath}");
 
+			var expressions = new HashSet<string>();
 			var symbols = new HashSet<string>();
 
 			Console.WriteLine("Files:");
@@ -72,7 +76,10 @@ namespace CleanUpDirectives
 					var match = Regex.Match(line!, @"^\s*#(if|elif)(?=\W)\s*([^\r\n/]+?)\s*$");
 					if (match.Success)
 					{
-						var node = ExpressionParser.Parse(match.Groups[2].Value);
+						var expression = match.Groups[2].Value;
+						expressions.Add(expression);
+
+						var node = ExpressionParser.Parse(expression);
 						foreach (var symbol in GetSymbols(node))
 							symbols.Add(symbol);
 					}
@@ -80,10 +87,21 @@ namespace CleanUpDirectives
 			}
 			Console.WriteLine();
 
-			Console.WriteLine("Symbols:");
-			foreach (var expression in symbols.OrderBy(x => x, StringComparer.Ordinal))
-				Console.WriteLine(expression);
-			Console.WriteLine();
+			if (shouldListExpressions)
+			{
+				Console.WriteLine("Expressions:");
+				foreach (var expression in expressions.OrderBy(x => x, StringComparer.Ordinal))
+					Console.WriteLine(expression);
+				Console.WriteLine();
+			}
+
+			if (shouldListSymbols)
+			{
+				Console.WriteLine("Symbols:");
+				foreach (var symbol in symbols.OrderBy(x => x, StringComparer.Ordinal))
+					Console.WriteLine(symbol);
+				Console.WriteLine();
+			}
 
 			return 0;
 
@@ -111,6 +129,9 @@ namespace CleanUpDirectives
 				"  <glob> : Clean up matching files, e.g. **/*.cs",
 				"",
 				"Options:",
-				"  -x|--exclude <glob> : Exclude matching files and directories"));
+				"  -x|--exclude <glob> : Exclude matching files and directories",
+				"  --list-expr : Lists all unique #if and #elif expressions",
+				"  --list-sym : Lists all symbols found in #if and #elif expressions",
+				""));
 	}
 }
