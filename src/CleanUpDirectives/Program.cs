@@ -37,6 +37,12 @@ namespace CleanUpDirectives
 			while (args.ReadOption("x|exclude") is string exclude)
 				excludes.Add(exclude);
 
+			var defines = new Dictionary<string, bool>();
+			while (args.ReadOption("define") is string define)
+				defines[define] = true;
+			while (args.ReadOption("undef") is string undef)
+				defines[undef] = false;
+
 			var shouldListExpressions = args.ReadFlag("list-expr");
 			var shouldListSymbols = args.ReadFlag("list-symbols");
 			var shouldFormat = args.ReadFlag("format");
@@ -75,7 +81,7 @@ namespace CleanUpDirectives
 				string?[] lines = Regex.Split(File.ReadAllText(path), @"(?<=\n)");
 				var needsSave = false;
 
-				for (int index = 0; index < lines.Length; index++)
+				for (var index = 0; index < lines.Length; index++)
 				{
 					var line = lines[index]!;
 					var match = Regex.Match(line, @"^\s*#(if|elif)(?=\W)\s*([^\r\n/]+?)\s*$");
@@ -83,13 +89,20 @@ namespace CleanUpDirectives
 					{
 						var expressionCapture = match.Groups[2];
 						var expression = expressionCapture.Value;
-						expressions.Add(expression);
 
 						var node = ExpressionParser.Parse(expression);
-						foreach (var symbol in GetSymbols(node))
-							symbols.Add(symbol);
+						var originalNode = node;
 
-						if (shouldFormat)
+						foreach (var (symbol, defined) in defines)
+						{
+							var (newNode, value) = ExpressionNode.TryRemoveSymbol(node, symbol, defined);
+							if (newNode != null)
+								node = newNode;
+							else if (value != null)
+								node = new ExpressionNode(value.Value ? "true" : "false");
+						}
+
+						if (shouldFormat || node != originalNode)
 						{
 							var formatted = node.ToString();
 							if (expression != formatted)
@@ -97,8 +110,14 @@ namespace CleanUpDirectives
 								lines[index] = line.Substring(0, expressionCapture.Index) + formatted +
 									line.Substring(expressionCapture.Index + expressionCapture.Length);
 								needsSave = true;
+								expression = formatted;
 							}
 						}
+
+						expressions.Add(expression);
+
+						foreach (var symbol in node.GetSymbols())
+							symbols.Add(symbol);
 					}
 				}
 
@@ -137,14 +156,6 @@ namespace CleanUpDirectives
 			}
 
 			return 0;
-
-			IEnumerable<string> GetSymbols(ExpressionNode node)
-			{
-				if (node.Children.Count == 0)
-					yield return node.Value;
-				foreach (var symbol in node.Children.SelectMany(GetSymbols))
-					yield return symbol;
-			}
 		}
 
 		private static IReadOnlyList<string> GetFullPathsFromGlobs(IEnumerable<string> globs) =>
@@ -164,8 +175,10 @@ namespace CleanUpDirectives
 				"Options:",
 				"  -x|--exclude <glob> : Exclude matching files and directories",
 				"  --format : Reformat #if and #elif expressions",
+				"  --define <symbol> : Remove uses of symbol as though it were defined",
+				"  --undef <symbol> : Remove uses of symbol as though it were not defined",
 				"  --list-expr : Lists all unique #if and #elif expressions",
-				"  --list-sym : Lists all symbols found in #if and #elif expressions",
+				"  --list-symbols : Lists all symbols found in #if and #elif expressions",
 				""));
 
 		private static readonly UTF8Encoding s_utf8 = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
