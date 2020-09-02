@@ -70,13 +70,15 @@ namespace CleanUpDirectives
 
 			var expressions = new HashSet<string>();
 			var symbols = new HashSet<string>();
+			var filesToSave = new List<(string Path, string Text)>();
 
 			Console.WriteLine("Files:");
 			foreach (var path in paths)
 			{
-				Console.Write(path);
+				Console.Write($"{path} ");
+				var fileText = File.ReadAllText(path);
 
-				string?[] lines = Regex.Split(File.ReadAllText(path), @"(?<=\n)");
+				string?[] lines = Regex.Split(fileText, @"(?<=\n)");
 				var needsSave = false;
 
 				var stateStack = new Stack<State>();
@@ -101,19 +103,19 @@ namespace CleanUpDirectives
 						{
 							if (state == State.DeleteToEnd)
 							{
-								lines[index] = null;
+								SetLine(null);
 
 								if (isIf)
 									stateStack.Push(State.DeleteToEnd);
 							}
 							else if (isIf && state == State.IfFalse)
 							{
-								lines[index] = null;
+								SetLine(null);
 								stateStack.Push(State.DeleteToEnd);
 							}
 							else if (!isIf && state == State.IfTrue)
 							{
-								lines[index] = null;
+								SetLine(null);
 								stateStack.Pop();
 								stateStack.Push(State.DeleteToEnd);
 							}
@@ -144,7 +146,7 @@ namespace CleanUpDirectives
 								{
 									if (shouldFormat || nodeBefore != nodeAfter)
 									{
-										var formatted = nodeBefore.ToString();
+										var formatted = nodeAfter.ToString();
 										if (expression != formatted)
 										{
 											SetLine(line.Substring(0, expressionCapture.Index) + formatted +
@@ -228,15 +230,33 @@ namespace CleanUpDirectives
 
 				if (needsSave)
 				{
-					File.WriteAllText(path, string.Concat(lines.Where(x => x != null)), s_utf8);
-					Console.WriteLine(" [edited]");
+					filesToSave.Add((Path: path, Text: string.Concat(lines.Where(x => x != null))));
+					Console.WriteLine("[edited]");
 				}
 				else
 				{
-					Console.WriteLine(" [viewed]");
+					Console.WriteLine("[viewed]");
 				}
 			}
 			Console.WriteLine();
+
+			if (filesToSave.Count != 0)
+			{
+				Console.WriteLine("This tool will edit the specified files in place. This tool may have bugs,");
+				Console.WriteLine("so your files should be backed up, and you should check the changes line by line.");
+				Console.Write($"ARE YOU SURE you want to edit {filesToSave.Count} files? (yes/no): ");
+				var answer = Console.ReadLine();
+				if (string.Equals(answer, "yes", StringComparison.OrdinalIgnoreCase))
+				{
+					foreach (var fileToSave in filesToSave)
+						File.WriteAllText(fileToSave.Path, fileToSave.Text, s_utf8);
+				}
+				else
+				{
+					Console.WriteLine("Changes not saved.");
+				}
+				Console.WriteLine();
+			}
 
 			if (shouldListExpressions)
 			{
