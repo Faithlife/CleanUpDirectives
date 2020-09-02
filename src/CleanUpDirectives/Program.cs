@@ -87,7 +87,7 @@ namespace CleanUpDirectives
 					var line = lines[index]!;
 					var state = stateStack.Peek();
 
-					var match = Regex.Match(line, @"^\s*#((?'cmd'if|elif)(?=\W)\s*(?'expr'[^\r\n/]+?)|(?'cmd'else|endif))\s*[\r\n/]", RegexOptions.ExplicitCapture);
+					var match = Regex.Match(line, @"^\s*#((?'cmd'if|elif)(?=\W)\s*(?'expr'[^\r\n/]+?)|(?'cmd'else|endif))\s*([\r\n/]|$)", RegexOptions.ExplicitCapture);
 					if (match.Success)
 					{
 						var commandCapture = match.Groups["cmd"];
