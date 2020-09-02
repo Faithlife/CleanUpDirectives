@@ -2,10 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Net.Sockets;
 using System.Text;
 using System.Text.RegularExpressions;
-using System.Threading;
 using ArgsReading;
 using GlobExpressions;
 
@@ -81,55 +79,156 @@ namespace CleanUpDirectives
 				string?[] lines = Regex.Split(File.ReadAllText(path), @"(?<=\n)");
 				var needsSave = false;
 
+				var stateStack = new Stack<State>();
+				stateStack.Push(State.Normal);
+
 				for (var index = 0; index < lines.Length; index++)
 				{
 					var line = lines[index]!;
-					var match = Regex.Match(line, @"^\s*#(if|elif)(?=\W)\s*([^\r\n/]+?)\s*$");
+					var state = stateStack.Peek();
+
+					var match = Regex.Match(line, @"^\s*#((?'cmd'if|elif)(?=\W)\s*(?'expr'[^\r\n/]+?)|(?'cmd'else|endif))\s*[\r\n/]", RegexOptions.ExplicitCapture);
 					if (match.Success)
 					{
-						var expressionCapture = match.Groups[2];
-						var expression = expressionCapture.Value;
+						var commandCapture = match.Groups["cmd"];
+						var command = commandCapture.Value;
+						var isIf = command == "if";
 
-						var node = ExpressionParser.Parse(expression);
-						var originalNode = node;
+						if (!isIf && stateStack.Count == 1)
+							throw new ApplicationException($"Unexpected #{command}");
 
-						foreach (var (symbol, defined) in defines)
+						if (isIf || command == "elif")
 						{
-							var (newNode, value) = ExpressionNode.TryRemoveSymbol(node, symbol, defined);
-							if (newNode != null)
-								node = newNode;
-							else if (value != null)
-								node = new ExpressionNode(value.Value ? "true" : "false");
-						}
-
-						if (shouldFormat || node != originalNode)
-						{
-							var formatted = node.ToString();
-							if (expression != formatted)
+							if (state == State.DeleteToEnd)
 							{
-								lines[index] = line.Substring(0, expressionCapture.Index) + formatted +
-									line.Substring(expressionCapture.Index + expressionCapture.Length);
-								needsSave = true;
-								expression = formatted;
+								lines[index] = null;
+
+								if (isIf)
+									stateStack.Push(State.DeleteToEnd);
+							}
+							else if (isIf && state == State.IfFalse)
+							{
+								lines[index] = null;
+								stateStack.Push(State.DeleteToEnd);
+							}
+							else if (!isIf && state == State.IfTrue)
+							{
+								lines[index] = null;
+								stateStack.Pop();
+								stateStack.Push(State.DeleteToEnd);
+							}
+							else
+							{
+								var expressionCapture = match.Groups["expr"];
+								var expression = expressionCapture.Value;
+
+								var nodeBefore = ExpressionParser.Parse(expression);
+								var nodeAfter = nodeBefore;
+								bool? constant = null;
+
+								foreach (var (symbol, defined) in defines)
+								{
+									var (node, value) = ExpressionNode.TryRemoveSymbol(nodeAfter, symbol, defined);
+									if (node != null)
+									{
+										nodeAfter = node;
+									}
+									else if (value != null)
+									{
+										constant = value;
+										break;
+									}
+								}
+
+								if (constant is null)
+								{
+									if (shouldFormat || nodeBefore != nodeAfter)
+									{
+										var formatted = nodeBefore.ToString();
+										if (expression != formatted)
+										{
+											SetLine(line.Substring(0, expressionCapture.Index) + formatted +
+												line.Substring(expressionCapture.Index + expressionCapture.Length));
+											expression = formatted;
+										}
+									}
+
+									expressions.Add(expression);
+
+									foreach (var symbol in nodeAfter.GetSymbols())
+										symbols.Add(symbol);
+
+									if (isIf)
+									{
+										stateStack.Push(State.Normal);
+									}
+									else if (state == State.IfFalse)
+									{
+										SetLine(line.Substring(0, commandCapture.Index) + "if" +
+											line.Substring(commandCapture.Index + commandCapture.Length));
+										stateStack.Pop();
+										stateStack.Push(State.Normal);
+									}
+								}
+								else if (isIf)
+								{
+									stateStack.Push(constant.Value ? State.IfTrue : State.IfFalse);
+									SetLine(null);
+								}
+								else
+								{
+									stateStack.Pop();
+									stateStack.Push(constant.Value ? State.IfTrue : State.IfFalse);
+									SetLine("#else");
+								}
 							}
 						}
+						else if (command == "else")
+						{
+							if (state == State.DeleteToEnd)
+							{
+								SetLine(null);
+							}
+							else if (state == State.IfTrue)
+							{
+								stateStack.Pop();
+								stateStack.Push(State.DeleteToEnd);
+								SetLine(null);
+							}
+							else if (state == State.IfFalse)
+							{
+								stateStack.Pop();
+								stateStack.Push(State.IfTrue);
+								SetLine(null);
+							}
+						}
+						else if (command == "endif")
+						{
+							if (state == State.DeleteToEnd || state == State.IfTrue || state == State.IfFalse)
+								SetLine(null);
 
-						expressions.Add(expression);
+							stateStack.Pop();
+						}
+						else
+						{
+							throw new InvalidOperationException("Unexpected command from regex.");
+						}
+					}
+					else if (state == State.DeleteToEnd || state == State.IfFalse)
+					{
+						SetLine(null);
+					}
 
-						foreach (var symbol in node.GetSymbols())
-							symbols.Add(symbol);
+					void SetLine(string? text)
+					{
+						lines[index] = text;
+						needsSave = true;
 					}
 				}
 
 				if (needsSave)
 				{
-					var newText = new StringBuilder();
-					foreach (var line in lines)
-					{
-						if (line != null)
-							newText.Append(line);
-					}
-					File.WriteAllText(path, newText.ToString(), s_utf8);
+					File.WriteAllText(path, string.Concat(lines.Where(x => x != null)), s_utf8);
 					Console.WriteLine(" [edited]");
 				}
 				else
@@ -180,6 +279,14 @@ namespace CleanUpDirectives
 				"  --list-expr : Lists all unique #if and #elif expressions",
 				"  --list-symbols : Lists all symbols found in #if and #elif expressions",
 				""));
+
+		private enum State
+		{
+			Normal,
+			DeleteToEnd,
+			IfTrue,
+			IfFalse,
+		}
 
 		private static readonly UTF8Encoding s_utf8 = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
 	}
