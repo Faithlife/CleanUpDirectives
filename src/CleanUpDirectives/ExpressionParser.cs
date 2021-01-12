@@ -14,7 +14,7 @@ namespace CleanUpDirectives
 			Parser.String(op, StringComparison.Ordinal).Trim();
 
 		private static IParser<ExpressionNode> Expression { get; } =
-			Parser.Ref(() => Expression).Bracketed(Op("("), Op(")")).Or(Name)
+			Parser.Ref(() => Expression!).Bracketed(Op("("), Op(")")).Or(Name)
 				.ChainUnary(Op("!").Trim(), (x, y) => new ExpressionNode(x, y))
 				.ChainBinary(Op("&&").Trim(), (x, y, z) => new ExpressionNode(x, y, z))
 				.ChainBinary(Op("||").Trim(), (x, y, z) => new ExpressionNode(x, y, z));
