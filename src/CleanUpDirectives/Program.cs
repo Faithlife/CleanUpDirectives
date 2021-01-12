@@ -25,7 +25,7 @@ namespace CleanUpDirectives
 			catch (Exception exception)
 			{
 				Console.Error.WriteLine(exception.ToString());
-				return 2
+				return 2;
 			}
 		}
 
