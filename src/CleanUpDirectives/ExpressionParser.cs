@@ -18,19 +18,5 @@ namespace CleanUpDirectives
 				.ChainUnary(Op("!").Trim(), (x, y) => new ExpressionNode(x, y))
 				.ChainBinary(Op("&&").Trim(), (x, y, z) => new ExpressionNode(x, y, z))
 				.ChainBinary(Op("||").Trim(), (x, y, z) => new ExpressionNode(x, y, z));
-
-		private static IParser<T> ChainUnary<T, TOp>(this IParser<T> parser, IParser<TOp> opParser, Func<TOp, T, T> apply)
-		{
-			return opParser.Then(Next).Or(parser);
-
-			IParser<T> Next(TOp outer) => opParser.Then(Next).Or(parser).Select(first => apply(outer, first));
-		}
-
-		private static IParser<T> ChainBinary<T, TOp>(this IParser<T> parser, IParser<TOp> opParser, Func<TOp, T, T, T> apply)
-		{
-			return parser.Then(Next);
-
-			IParser<T> Next(T first) => opParser.Then(op => parser.Then(second => Next(apply(op, first, second)))).Or(Parser.Success(first));
-		}
 	}
 }
