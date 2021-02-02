@@ -2,11 +2,11 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>netcoreapp3.1</TargetFramework>
-    <Description>A .NET Core Tool to clean up C# preprocessor directives.</Description>
+    <TargetFramework>net5.0</TargetFramework>
+    <Description>A tool to clean up C# preprocessor directives.</Description>
     <PackageTags>preprocessor directive</PackageTags>
     <IsPackable>true</IsPackable>
-    <PackAsTool>True</PackAsTool>
+    <PackAsTool>true</PackAsTool>
   </PropertyGroup>
 
   <ItemGroup>

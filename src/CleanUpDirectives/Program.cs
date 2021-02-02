@@ -17,7 +17,7 @@ namespace CleanUpDirectives
 			{
 				return Run(new ArgsReader(args));
 			}
-			catch (Exception exception) when (exception is ApplicationException || exception is ArgsReaderException)
+			catch (Exception exception) when (exception is ArgsReaderException)
 			{
 				Console.Error.WriteLine(exception.Message);
 				return 2;
@@ -55,18 +55,18 @@ namespace CleanUpDirectives
 				.Except(GetFullPathsFromGlobs(excludes))
 				.ToList();
 			if (paths.Count == 0)
-				throw new ApplicationException("No files found.");
+				throw new ArgsReaderException("No files found.");
 
 			var excludePaths = GetFullPathsFromGlobs(excludes)
 				.Select(x => Directory.Exists(x) ? (x + Path.DirectorySeparatorChar) : x)
 				.ToList();
 			paths = paths.Where(path => !excludePaths.Any(x => path.StartsWith(x, StringComparison.Ordinal))).ToList();
 			if (paths.Count == 0)
-				throw new ApplicationException("All files excluded.");
+				throw new ArgsReaderException("All files excluded.");
 
 			var invalidPath = paths.FirstOrDefault(Directory.Exists);
 			if (invalidPath != null)
-				throw new ApplicationException($"Directories not supported; use glob to select files, e.g. **/*.cs{Environment.NewLine}Directory matched: {invalidPath}");
+				throw new ArgsReaderException($"Directories not supported; use glob to select files, e.g. **/*.cs{Environment.NewLine}Directory matched: {invalidPath}");
 
 			var expressions = new HashSet<string>();
 			var symbols = new HashSet<string>();
@@ -97,7 +97,7 @@ namespace CleanUpDirectives
 						var isIf = command == "if";
 
 						if (!isIf && stateStack.Count == 1)
-							throw new ApplicationException($"Unexpected #{command}");
+							throw new ArgsReaderException($"Unexpected #{command}");
 
 						if (isIf || command == "elif")
 						{
@@ -286,8 +286,8 @@ namespace CleanUpDirectives
 				.OrderBy(x => x, StringComparer.Ordinal)
 				.ToList();
 
-		private static ApplicationException CreateUsageException() =>
-			new ApplicationException(string.Join(Environment.NewLine,
+		private static ArgsReaderException CreateUsageException() =>
+			new ArgsReaderException(string.Join(Environment.NewLine,
 				"Usage: CleanUpDirectives <glob> ... [options]",
 				"  <glob> : Clean up matching files, e.g. **/*.cs",
 				"",
