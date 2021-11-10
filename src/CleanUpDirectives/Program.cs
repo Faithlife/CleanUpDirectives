@@ -149,8 +149,7 @@ namespace CleanUpDirectives
 										var formatted = nodeAfter.ToString();
 										if (expression != formatted)
 										{
-											SetLine(line.Substring(0, expressionCapture.Index) + formatted +
-												line.Substring(expressionCapture.Index + expressionCapture.Length));
+											SetLine(string.Concat(line.AsSpan(0, expressionCapture.Index), formatted, line.AsSpan(expressionCapture.Index + expressionCapture.Length)));
 											expression = formatted;
 										}
 									}
@@ -166,8 +165,7 @@ namespace CleanUpDirectives
 									}
 									else if (state == State.IfFalse)
 									{
-										SetLine(line.Substring(0, commandCapture.Index) + "if" +
-											line.Substring(commandCapture.Index + commandCapture.Length));
+										SetLine(string.Concat(line.AsSpan(0, commandCapture.Index), "if", line.AsSpan(commandCapture.Index + commandCapture.Length)));
 										stateStack.Pop();
 										stateStack.Push(State.Normal);
 									}
